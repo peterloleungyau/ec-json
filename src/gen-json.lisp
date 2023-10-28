@@ -91,7 +91,15 @@ If it is keyword or plain symbol, if there are mixed cases, return the string fo
              (setf pr-sep t))
     (write-char #\] out)))
 
-(defun print-alist-as-json (alist &optional (out *standard-output*))
+;; print as obj
+
+(defvar *allow-duplicate-json-obj-keys* nil
+  "If T, will allow a key to appear more than once in the object output for plist and alist.
+If NIL, for duplicate key, will only output the first that appears in plist or alist,
+  i.e. you may append to the front of plist and alist to override some fields, and get
+  the desired output as JSON object.")
+
+(defun print-alist-as-json-no-dup-keys (alist &optional (out *standard-output*))
   (let ((key-seen (make-hash-table :test 'equal))
         ;; key-seen uses the string form of the key for indexing
         ;; If a key is already printed, skip it
@@ -110,7 +118,26 @@ If it is keyword or plain symbol, if there are mixed cases, return the string fo
                 pr-sep t))))
     (write-char #\} out)))
 
-(defun print-plist-as-json (plist &optional (out *standard-output*))
+(defun print-alist-as-json-allow-dup-keys (alist &optional (out *standard-output*))
+  (let ((pr-sep nil))
+    (write-char #\{ out)
+    (dolist (z alist)
+      (when pr-sep (write-string ", " out))
+      (print-string-as-json (key-as-string (car z)) out)
+      (write-char #\: out)
+      (print-as-json (cdr z) out)
+      (setf pr-sep t))
+    (write-char #\} out)))
+
+(defun print-alist-as-json (alist
+                            &optional
+                              (out *standard-output*)
+                              (allow-dup-keys *allow-duplicate-json-obj-keys*))
+  (if allow-dup-keys
+      (print-alist-as-json-allow-dup-keys alist out)
+      (print-alist-as-json-no-dup-keys alist out)))
+
+(defun print-plist-as-json-no-dup-keys (plist &optional (out *standard-output*))
   (let ((key-seen (make-hash-table :test 'equal))
         ;; key-seen uses the string form of the key for indexing
         ;; If a key is already printed, skip it
@@ -130,7 +157,34 @@ If it is keyword or plain symbol, if there are mixed cases, return the string fo
                 pr-sep t))))
     (write-char #\} out)))
 
+(defun print-plist-as-json-allow-dup-keys (plist &optional (out *standard-output*))
+  (let ((pr-sep nil))
+    (write-char #\{ out)
+    (do ((zs plist (cddr zs)))
+        ((null zs))
+      (when pr-sep (write-string ", " out))
+      (print-string-as-json (key-as-string (car zs)) out)
+      (write-char #\: out)
+      (print-as-json (cadr zs) out)
+      (setf pr-sep t))
+    (write-char #\} out)))
+
+(defun print-plist-as-json (plist
+                            &optional
+                              (out *standard-output*)
+                              (allow-dup-keys *allow-duplicate-json-obj-keys*))
+  (if allow-dup-keys
+      (print-plist-as-json-allow-dup-keys plist out)
+      (print-plist-as-json-no-dup-keys plist out)))
+
 (defun print-hash-table-as-json (hash-table &optional (out *standard-output*))
+  ;; assume the keys are unique, although it is possible that some
+  ;; keys are string, and some are symbol, some are keyword, so still
+  ;; may have duplicate keys in JSON.
+
+  ;; But because there is no natural order of keys, we do not assume
+  ;; and order to remove dups, the caller should do it themeselves it
+  ;; they care about not having dup keys.
   (let ((pr-sep nil))
     (write-char #\{ out)
     (loop :for k :being :each hash-key :of hash-table
