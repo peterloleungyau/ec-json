@@ -6,7 +6,37 @@
 (in-package :ec-json)
 
 ;;;;;;;;;;;;;;
+;; default output stream
+;; reference: https://github.com/hankhero/cl-json/blob/194115007dcd3c75c8ace371a5ac6d6aa1b1a9dc/src/encoder.lisp#L8-L9
+(defvar *json-output* (make-synonym-stream '*standard-output*)
+  "The default output stream for encoding operations.")
+
+;;;;;;;;;;;;;;
+;; condition for error, so that it can be specifically catched and handled.
+;; reference: https://github.com/hankhero/cl-json/blob/194115007dcd3c75c8ace371a5ac6d6aa1b1a9dc/src/encoder.lisp#L11-L28
+
+(define-condition unencodable-value-error (type-error)
+  ((context :accessor unencodable-value-error-context :initarg :context))
+  (:documentation
+   "Signalled when a datum is unhandled in encoding as JSON.")
+  (:default-initargs :expected-type t)
+  (:report
+   (lambda (condition stream)
+     (with-accessors ((datum type-error-datum)
+                      (context unencodable-value-error-context))
+         condition
+       (format stream
+               "Value ~S is not of a type which can be encoded as JSON~@[ by ~A~]."
+               datum context)))))
+
+(defun unencodable-value-error (value &optional context)
+  "Signal an UNENCODABLE-VALUE-ERROR."
+  (error 'unencodable-value-error :datum value :context context))
+
+;;;;;;;;;;;;;;
 ;; Special values for JSON
+;;
+;; you may create any special value to output verbatium when encoded.
 
 (defstruct json-value
   print-form)
@@ -63,16 +93,16 @@ If it is keyword or plain symbol, if there are mixed cases, return the string fo
         (format out "\\u~4,'0x" (char-code char)))
        (t (write-char char out))))))
 
-(defun print-string-as-json (str &optional (out *standard-output*))
+(defun print-string-as-json (str &optional (out *json-output*))
   ;; reference: https://github.com/gigamonkey/monkeylib-json/blob/master/json.lisp#L70C1-L73C27
   (write-char #\" out)
   (loop :for char :across str :do (print-one-json-char char out))
   (write-char #\" out))
 
-(defun print-symbol-as-json (sym &optional (out *standard-output*))
+(defun print-symbol-as-json (sym &optional (out *json-output*))
   (print-string-as-json (key-as-string sym) out))
 
-(defun print-list-as-json-array (lst &optional (out *standard-output*))
+(defun print-list-as-json-array (lst &optional (out *json-output*))
   (let ((pr-sep nil))
     (write-char #\[ out)
     (dolist (x lst)
@@ -81,7 +111,7 @@ If it is keyword or plain symbol, if there are mixed cases, return the string fo
       (setf pr-sep t))
     (write-char #\] out)))
 
-(defun print-array-as-json (arr &optional (out *standard-output*))
+(defun print-array-as-json (arr &optional (out *json-output*))
   (let ((pr-sep nil))
     (write-char #\[ out)
     (loop :for x :across arr
@@ -93,13 +123,13 @@ If it is keyword or plain symbol, if there are mixed cases, return the string fo
 
 ;; print as obj
 
-(defvar *allow-duplicate-json-obj-keys* nil
+(defvar *allow-dup-keys* nil
   "If T, will allow a key to appear more than once in the object output for plist and alist.
 If NIL, for duplicate key, will only output the first that appears in plist or alist,
   i.e. you may append to the front of plist and alist to override some fields, and get
   the desired output as JSON object.")
 
-(defun print-alist-as-json-no-dup-keys (alist &optional (out *standard-output*))
+(defun print-alist-as-json-no-dup-keys (alist &optional (out *json-output*))
   (let ((key-seen (make-hash-table :test 'equal))
         ;; key-seen uses the string form of the key for indexing
         ;; If a key is already printed, skip it
@@ -118,7 +148,7 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
                 pr-sep t))))
     (write-char #\} out)))
 
-(defun print-alist-as-json-allow-dup-keys (alist &optional (out *standard-output*))
+(defun print-alist-as-json-allow-dup-keys (alist &optional (out *json-output*))
   (let ((pr-sep nil))
     (write-char #\{ out)
     (dolist (z alist)
@@ -131,13 +161,13 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
 
 (defun print-alist-as-json (alist
                             &optional
-                              (out *standard-output*)
-                              (allow-dup-keys *allow-duplicate-json-obj-keys*))
+                              (out *json-output*)
+                              (allow-dup-keys *allow-dup-keys*))
   (if allow-dup-keys
       (print-alist-as-json-allow-dup-keys alist out)
       (print-alist-as-json-no-dup-keys alist out)))
 
-(defun print-plist-as-json-no-dup-keys (plist &optional (out *standard-output*))
+(defun print-plist-as-json-no-dup-keys (plist &optional (out *json-output*))
   (let ((key-seen (make-hash-table :test 'equal))
         ;; key-seen uses the string form of the key for indexing
         ;; If a key is already printed, skip it
@@ -157,7 +187,7 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
                 pr-sep t))))
     (write-char #\} out)))
 
-(defun print-plist-as-json-allow-dup-keys (plist &optional (out *standard-output*))
+(defun print-plist-as-json-allow-dup-keys (plist &optional (out *json-output*))
   (let ((pr-sep nil))
     (write-char #\{ out)
     (do ((zs plist (cddr zs)))
@@ -171,13 +201,13 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
 
 (defun print-plist-as-json (plist
                             &optional
-                              (out *standard-output*)
-                              (allow-dup-keys *allow-duplicate-json-obj-keys*))
+                              (out *json-output*)
+                              (allow-dup-keys *allow-dup-keys*))
   (if allow-dup-keys
       (print-plist-as-json-allow-dup-keys plist out)
       (print-plist-as-json-no-dup-keys plist out)))
 
-(defun print-hash-table-as-json (hash-table &optional (out *standard-output*))
+(defun print-hash-table-as-json (hash-table &optional (out *json-output*))
   ;; assume the keys are unique, although it is possible that some
   ;; keys are string, and some are symbol, some are keyword, so still
   ;; may have duplicate keys in JSON.
@@ -215,7 +245,7 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
         (when (subtypep 'long-float 'double-float)
           (pushnew :ec-json-double-long-float-same *features*)))))
 
-(defun print-real-as-json (r &optional (out *standard-output*))
+(defun print-real-as-json (r &optional (out *json-output*))
   ;; reference: https://github.com/hankhero/cl-json/blob/194115007dcd3c75c8ace371a5ac6d6aa1b1a9dc/src/encoder.lisp#L406-L423
   ;; we want the printed form to always use 'e' as the exponent marker
   ;; print will use *read-default-float-format* and compare with current type of the float
@@ -239,9 +269,9 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
                        ec-json-only-one-float-type)
                     (long-float 'long-float))))
             (format out "~F" r)))
-    (t (error "Unsupported number type in print-real-as-json: ~A" r))))
+    (t (unencodable-value-error r 'print-real-as-json))))
 
-(defmethod print-as-json (x &optional (out *standard-output*))
+(defmethod print-as-json (x &optional (out *json-output*))
   "Default method to give default handling of base types, so that user may override for base types."
   (cond ((eq x t) (format out "true"))
         ((null x) (format out "null"))
@@ -253,5 +283,5 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
         ((arrayp x) (print-array-as-json x out))
         ((hash-table-p x) (print-hash-table-as-json x out))
         ;; TODO: guess alist, plist, plain list as array
-        (t (error "Unsupported value in print-as-json: ~A" x))))
+        (t (unencodable-value-error x 'print-as-json))))
    
