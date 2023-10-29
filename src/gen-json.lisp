@@ -62,17 +62,74 @@
 You may define methods for this generic function for specific types, so as to customize the output, e.g. for timestamps."))
 
 ;;;;;;;;;;;;;;
-;; helper functions and specific function for one type of value
+;; to convert key (which could be keyword or symbol) to string.
+;; It is convenient and customary to use symbol or keyword symbol as keys in plist, alist or hash-table.
+;; But by default Common Lisp will read them all as upper-case (due to historical reason).
+;; However, often the keys we want to output is lower-case. It would be tedious to write :|lower-case-symbol|.
+;; Therefore, we provide convenience to choose how to convert, depending on the value of *how-to-convert-key-case*.
+;; By default it is to convert keyword and symbols to lower case string when encoded as JSON keys, unless it is mixed case.
+;; Also, this conversion (if conversion is needed) is memoized and customizable.
+
+(defvar *how-to-convert-key-case* :lower-unless-mixed-case
+  "Control how to convert keyword or symbol to string as JSON key, for use in #'convert-key-to-str,
+ which is called by the default *key-as-str-func* #'key-as-string.
+It can be one of the following:
+  :lower-unless-mixed-case => convert to lower case if the symbol is not mixed case;
+  :lower => convert to lower in any case;
+  :as-is => simply use the symbol-name, does not do any convertion.")
+
+(defun convert-key-to-str (k)
+  (let ((s (symbol-name k)))
+    (ecase *how-to-convert-key-case*
+      (:as-is s)
+      (:lower (string-downcase s))
+      (:lower-unless-mixed-case
+       ;; NOTE: characters in Common Lisp could be either upper case, or lower case, or neither.
+       ;; And the reader by default reads all character to upper case (if applicable).
+
+       ;; Therefore, if there is any lower case character, then either
+       ;; we have mixed case (there is some upper case character); or
+       ;; we have no upper case character. In both cases, we do not
+       ;; need to convert.
+       (if (some #'lower-case-p s)
+           s
+           (string-downcase s))))))
+
+(defvar *convert-key-to-str* (make-hash-table :test 'eq)
+  "Memoized conversion (when *how-to-convert-key-case* is not :as-is) from keyword or symbol to the string.
+
+Therefore uses 'eq for test.  You may replace this for your convenient
+mapping, or add to this hash-table for desired mapping.")
 
 (defun key-as-string (k)
   "K can be keyword, a symbol, or a string. Return the string form, to be used as key in JSON object.
+For keyword and symbol, the result is also memoized in *key-strs*.
 If it is string, it is returned as is.
-If it is keyword or plain symbol, if there are mixed cases, return the string form with mixed case ; otherwise return the lowercase form."
-  ;; TODO
-  (declare (ignorable k))
-  )
+If it is keyword or plain symbol, if *how-to-convert-key-case* is :as-is, return the symbol-name as it;
+otherwise if the key is in the hash-table *convert-key-to-str*, then use the found string;
+otherwise convert to string using #'convert-key-to-str, which may convert case depending on
+ *how-to-convert-key-case* and memoize the result to *convert-key-to-str*"
+  (etypecase k
+    (string k)
+    (symbol
+     (if (eq *how-to-convert-key-case* :as-is)
+         (symbol-name k)
+         ;; might need to convert, see if memoized
+         (let ((s (gethash k *convert-key-to-str*)))
+           (if s
+               s
+               (setf (gethash k *convert-key-to-str*)
+                     (convert-key-to-str k))))))))
 
-(defun print-one-json-char (char &optional (out *standard-output*))
+(defvar *key-as-str-func* #'key-as-string
+  "A function (k -> str) to convert a keyword, symbol, or string to a string as JSON key.
+Default is #'key-as-string, which use string as is;
+ and convert keyword or symbol to lower case, unless they are mixed case, and with memoization.")
+
+;;;;;;;;;;;;;;
+;; helper functions and specific function for one type of value
+
+(defun print-one-json-char (char &optional (out *json-output*))
   ;; reference: https://github.com/gigamonkey/monkeylib-json/blob/88a52b5fe7037f88fd57908b8f79fd8f1c521401/json.lisp#L75-L89
   ;; added some comment
   (case char
@@ -100,7 +157,7 @@ If it is keyword or plain symbol, if there are mixed cases, return the string fo
   (write-char #\" out))
 
 (defun print-symbol-as-json (sym &optional (out *json-output*))
-  (print-string-as-json (key-as-string sym) out))
+  (print-string-as-json (funcall *key-as-str-func* sym) out))
 
 (defun print-list-as-json-array (lst &optional (out *json-output*))
   (let ((pr-sep nil))
@@ -136,7 +193,7 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
         (pr-sep nil))
     (write-char #\{ out)
     (dolist (z alist)
-      (let ((k (key-as-string (car z))))
+      (let ((k (funcall *key-as-str-func* (car z))))
         (unless (gethash k key-seen)
           ;; unseen, print it
           (when pr-sep (write-string ", " out))
@@ -153,7 +210,7 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
     (write-char #\{ out)
     (dolist (z alist)
       (when pr-sep (write-string ", " out))
-      (print-string-as-json (key-as-string (car z)) out)
+      (print-string-as-json (funcall *key-as-str-func* (car z)) out)
       (write-char #\: out)
       (print-as-json (cdr z) out)
       (setf pr-sep t))
@@ -175,7 +232,7 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
     (write-char #\{ out)
     (do ((zs plist (cddr zs)))
         ((null zs))
-      (let ((k (key-as-string (car zs))))
+      (let ((k (funcall *key-as-str-func* (car zs))))
         (unless (gethash k key-seen)
           ;; unseen, print it
           (when pr-sep (write-string ", " out))
@@ -193,7 +250,7 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
     (do ((zs plist (cddr zs)))
         ((null zs))
       (when pr-sep (write-string ", " out))
-      (print-string-as-json (key-as-string (car zs)) out)
+      (print-string-as-json (funcall *key-as-str-func* (car zs)) out)
       (write-char #\: out)
       (print-as-json (cadr zs) out)
       (setf pr-sep t))
@@ -222,7 +279,7 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
           :do
              (when pr-sep (write-string ", " out))
              ;; assuming the keys are either keyword, symbol or string, or otherwise coerce it to string
-             (print-string-as-json (key-as-string k) out)
+             (print-string-as-json (funcall *key-as-str-func* k) out)
              (write-char #\: out)
              (print-as-json v out)
              (setf pr-sep t))
