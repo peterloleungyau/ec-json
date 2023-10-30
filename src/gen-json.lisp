@@ -50,9 +50,31 @@
 (defvar *json-null* (make-json-value :print-form "null")
   "The null for JSON, because NIL in Lisp could represent multiple things.")
 
-(defstruct json-obj
-  ;; could be plist, alist, or hash-table
-  val)
+;;;;;;;;;;;;;;
+;; to mark different types of obj: either hash-table, plist wrapped in struct, alist wrapped in struct.
+;; 
+;; If you want to directly make the type, e.g. (make-plist-json-obj :plist lst)
+;;
+;; You may use as-json-obj to try to guess the type, and make the appropriate struct, or just return the hash-table.
+
+(defstruct plist-json-obj
+  ;; (key1 val1 key2 val2 ...)
+  plist)
+
+(defstruct alist-json-obj
+  ;; ((key1 val1) (key2 val2) ...)
+  alist)
+
+(defun as-json-obj (val)
+  "VAL could be either hash-table, or a plist (where car looks like a key) or an alist (where car is a cons).
+If it is hash-table, return as is.
+If it looks like a plist, make a plist-json-obj.
+If it looks like an alist, make a alist-json-obj."
+  (etypecase val
+    (hash-table val)
+    (cons (if (consp (car val))
+              (make-alist-json-obj :alist val)
+              (make-plist-json-obj :plist val)))))
 
 ;;;;;;;;;;;;;;
 ;; Generic function for printing, so that it can be overriden
@@ -339,6 +361,15 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
         ((symbolp x) (print-symbol-as-json x out))
         ((arrayp x) (print-array-as-json x out))
         ((hash-table-p x) (print-hash-table-as-json x out))
-        ;; TODO: guess alist, plist, plain list as array
+        ((plist-json-obj-p x) (print-plist-as-json (plist-json-obj-plist x) out))
+        ((alist-json-obj-p x) (print-alist-as-json (alist-json-obj-alist x) out))
+        ((consp x)
+         ;; guess alist, plist, or plain list as array
+         (let ((cx (car x)))
+           (cond ((consp cx)
+                  (print-alist-as-json x out))
+                 ((or (symbolp cx) (stringp cx))
+                  (print-plist-as-json x out))
+                 (t (print-list-as-json-array x out)))))                
         (t (unencodable-value-error x 'print-as-json))))
    
