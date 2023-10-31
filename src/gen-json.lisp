@@ -1,43 +1,43 @@
 (defpackage :ec-json
   (:use :cl)
   (:export
-   *json-output*
+   #:*json-output*
    ;;
-   unencodable-value-error
-   unencodable-value-error-context
+   #:unencodable-value-error
+   #:unencodable-value-error-context
    ;;
-   make-json-value
-   json-value-print-form
-   *json-true*
-   *json-false*
-   *json-null*
+   #:make-json-value
+   #:json-value-print-form
+   #:*json-true*
+   #:*json-false*
+   #:*json-null*
    ;;
-   make-plist-json-obj
-   make-alist-json-obj
-   as-json-obj
+   #:make-plist-json-obj
+   #:make-alist-json-obj
+   #:as-json-obj
    ;;
-   print-as-json
-   *how-to-convert-key-case*
-   convert-key-to-str
-   *convert-key-to-str*
-   key-as-string
-   *key-as-str-func*
+   #:print-as-json
+   #:*how-to-convert-key-case*
+   #:convert-key-to-str
+   #:*convert-key-to-str*
+   #:key-as-string
+   #:*key-as-str-func*
    ;;
-   print-string-as-json
-   print-symbol-as-json
-   print-list-as-json-array
-   print-array-as-json
+   #:print-string-as-json
+   #:print-symbol-as-json
+   #:print-list-as-json-array
+   #:print-array-as-json
    ;;
-   *allow-dup-keys*
-   print-alist-as-json-no-dup-keys
-   print-alist-as-json-allow-dup-keys
-   print-alist-as-json
-   print-plist-as-json-no-dup-keys
-   print-plist-as-json-allow-dup-keys
-   print-plist-as-json
-   print-hash-table-as-json
+   #:*allow-dup-keys*
+   #:print-alist-as-json-no-dup-keys
+   #:print-alist-as-json-allow-dup-keys
+   #:print-alist-as-json
+   #:print-plist-as-json-no-dup-keys
+   #:print-plist-as-json-allow-dup-keys
+   #:print-plist-as-json
+   #:print-hash-table-as-json
    ;;
-   print-real-as-json
+   #:print-real-as-json
    ))
 
 (in-package :ec-json)
