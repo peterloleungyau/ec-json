@@ -78,14 +78,21 @@
 (defstruct json-value
   print-form)
 
-(defvar *json-true* (make-json-value :print-form "true")
-  "The true for JSON, for completeness, could have used Lisp's T.")
-
-(defvar *json-false* (make-json-value :print-form "false")
-  "The false for JSON, because NIL in Lisp could represent multiple things.")
-
-(defvar *json-null* (make-json-value :print-form "null")
-  "The null for JSON, because NIL in Lisp could represent multiple things.")
+;; since JSON has true, null and false, for convenience, we use the
+;; following values to represent them:
+;;
+;; true -> T or :true
+;; false -> :false
+;; null -> :null
+;;
+;; NOTE: since keywords can serve as keys in plist, if these :true,
+;; :false and :null appear as car in a list, the list would by default
+;; treated as plist and these will become JSON keys.
+;;
+;; NIL will be treated as empty JSON object, i.e. {}
+;;
+;; If you want to output an array of these values, or an empty array,
+;; you are recommended to use Lisp array instead.
 
 ;;;;;;;;;;;;;;
 ;; to mark different types of obj: either hash-table, plist wrapped in struct, alist wrapped in struct.
@@ -389,8 +396,11 @@ If NIL, for duplicate key, will only output the first that appears in plist or a
 
 (defmethod print-as-json (x &optional (out *json-output*))
   "Default method to give default handling of base types, so that user may override for base types."
-  (cond ((eq x t) (format out "true"))
-        ((null x) (format out "null"))
+  (cond ((null x) (write-string "{}" out))
+        ((or (eq x t) (eq x :true))
+         (write-string "true" out))
+        ((eq x :false) (write-string "false" out))
+        ((eq x :null) (write-string "null" out))
         ((integerp x) (format out "~D" x))
         ((realp x) (print-real-as-json x out))
         ((stringp x) (print-string-as-json x out))
