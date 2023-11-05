@@ -1,0 +1,116 @@
+* EC-JSON
+
+EC-JSON is a simple JSON encoder for Common Lisp, originally intended
+for use in [[https://github.com/peterloleungyau/cl-plotly][cl-plotly]] to generate the [[https://plotly.com/javascript/getting-started/][plotly]] interactive graphs. Since
+plotly graphs are described by Javascript values, it could be
+generated nicely with JSON. But this simple JSON encoder could also be
+used for other simple purpose, so it is split into a separate library.
+
+** Installation
+
+*** With Quicklisp
+The simplest way is to use [[https://www.quicklisp.org/beta/][Quicklisp]].
+
+1. First clone this project into Quicklisp's local-projects directory =/quicklist/local-projects/=
+
+2. Then in Lisp REPL, can load with
+
+#+begin_src lisp
+  (ql:quickload :ec-json)
+#+end_src
+
+*** With ASDF
+For more traditional [[https://asdf.common-lisp.dev/][ASDF]] configuration, you may do the following:
+
+1. First clone this project into any of the local directories configured with ASDF. E.g. look at =asdf:*central-registry*= in Lisp REPL to see the configured directories.
+
+2. Then in Lisp REPL, can load with
+
+#+begin_src lisp
+  (asdf:load-system :ec-json)
+#+end_src
+
+** Usage
+
+*** Value Mapping
+| From Lisp           | To JSON                       | Remarks                                                          |
+|---------------------+-------------------------------+------------------------------------------------------------------|
+| =T=                 | =true=                        |                                                                  |
+| =:true=             | =true=                        |                                                                  |
+| =:false=            | =false=                       |                                                                  |
+| =NIL=               | ={}=                          | Empty object                                                     |
+| =:null=             | =null=                        |                                                                  |
+| integer             | integer without decimal point |                                                                  |
+| real number         | real number                   | Ratio is printed as single-float                                 |
+| string              | string                        | Properly escaped the few character required by JSON.             |
+| =#(v1 v2 ...)=      | =[v1, v2, ...]=               | Each value in the array is recursively output.                   |
+| =#()=               | []                            |                                                                  |
+| =JSON-VALUE=        | verbatim                      | Can control the exact thing printed.                             |
+| symbol              | string                        | Possibly with case conversion                                    |
+| hash table          | ={"k1":v1, "k2":v2, ...}=     | Keys may be case converted. Order not guaranteed.                |
+| =(k1 v1 k2 v2 ...)= | ={"k1":v1, "k2":v2, ...}=     | Plist, =k1= either symbol or string. Keys may be case converted. |
+| =((k1 . v1) ...)=   | ={"k1":v1, ...}=              | Alist, keys may be case converted                                |
+| =plist-json-obj=    | object                        | Force to treat list as plist.                                    |
+| =alist-json-obj=    | object                        | Force to treat list as alist.                                    |
+| =(v1 v2 ...)=       | =[v1, v2, ...]=               | List if =v1= is neither symbol nor string, treat as array.       |
+
+**** =T=, =NIL= and null
+Since in Common Lisp, =NIL= means both false and empty list, we
+therefore treat =NIL= as empty list, and map to the empty JSON object
+={}=. We instead uses =:false= to map to JSON false, and uses =:null=
+to map to JSON null. For completeness, we also allow =:true= to map to
+JSON true, and the Lisp true =T= of course maps to JOSN true.
+
+**** Mapping Lisp list
+A Lisp list may be guessed as either:
+
+- plist (property list): if the first item is a symbol (normal symbol
+  or keyword) or string. Maps to JSON object.
+
+- alist (association list): if the first item is a cons. Maps to JSON
+  object.
+
+- array (single dimension): if the first item is neither symbol nor
+  string. Therefore a list of numbers is mapped to JSON array of
+  numbers, which is convenient. For other kinds of values, we
+  recommend coercing to Lisp array to ensure that it is output as JSON
+  array.
+
+For the special case of empty Lisp list (i.e. =NIL= or =()=), we
+choose to map to empty JSON object ={}=.
+
+**** Case conversion for symbols
+In Lisp, a keyword symbol or plain symbol is often used as keys in
+hash-table, plist or alist.
+
+Symbols in Lisp are by default read as upper case, and characters in
+Lisp may be lower case, upper case, or neither. It may be more common
+to use lower case for keys in JSON (e.g. plotly), so we by default
+performs case conversion for symbols so that we need to write symbols
+as =:|hello|= to get ="hello"=, or =:|World|= to get ="World"=.
+
+***** Default case conversion
+The default conversion rule is as follows (which can be customized,
+see "Customization") as follows:
+
+- with both upper and lower case: use symbol name as string as is.
+- otherwise: convert the symbol name as string to lower case.
+
+NOTE: in the implementation, we convert to lower case if the symbol
+name has any lower case character, because if there are no lower case
+characters, it cannot be mixed case.
+
+***** Caching
+TODO
+
+**** Duplicate keys in objects
+TODO
+
+*** Main Functions
+TODO
+
+*** Customization
+TODO
+
+** Limitations
+TODO
