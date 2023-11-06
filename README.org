@@ -1,3 +1,7 @@
+#+STARTUP: indent
+#+STARTUP: overview
+#+STARTUP: logdone
+
 * EC-JSON
 
 EC-JSON is a simple JSON encoder for Common Lisp, originally intended
@@ -11,7 +15,7 @@ used for other simple purpose, so it is split into a separate library.
 *** With Quicklisp
 The simplest way is to use [[https://www.quicklisp.org/beta/][Quicklisp]].
 
-1. First clone this project into Quicklisp's local-projects directory =/quicklist/local-projects/=
+1. First clone this project into Quicklisp's local-projects directory =~/quicklist/local-projects/=
 
 2. Then in Lisp REPL, can load with
 
@@ -22,7 +26,9 @@ The simplest way is to use [[https://www.quicklisp.org/beta/][Quicklisp]].
 *** With ASDF
 For more traditional [[https://asdf.common-lisp.dev/][ASDF]] configuration, you may do the following:
 
-1. First clone this project into any of the local directories configured with ASDF. E.g. look at =asdf:*central-registry*= in Lisp REPL to see the configured directories.
+1. First clone this project into any of the local directories
+   configured with ASDF. E.g. look at =asdf:*central-registry*= in
+   Lisp REPL to see the configured directories.
 
 2. Then in Lisp REPL, can load with
 
@@ -33,26 +39,26 @@ For more traditional [[https://asdf.common-lisp.dev/][ASDF]] configuration, you 
 ** Usage
 
 *** Value Mapping
-| From Lisp           | To JSON                       | Remarks                                                          |
-|---------------------+-------------------------------+------------------------------------------------------------------|
-| =T=                 | =true=                        |                                                                  |
-| =:true=             | =true=                        |                                                                  |
-| =:false=            | =false=                       |                                                                  |
-| =NIL=               | ={}=                          | Empty object                                                     |
-| =:null=             | =null=                        |                                                                  |
-| integer             | integer without decimal point |                                                                  |
-| real number         | real number                   | Ratio is printed as single-float                                 |
-| string              | string                        | Properly escaped the few character required by JSON.             |
-| =#(v1 v2 ...)=      | =[v1, v2, ...]=               | Each value in the array is recursively output.                   |
-| =#()=               | []                            |                                                                  |
-| =JSON-VALUE=        | verbatim                      | Can control the exact thing printed.                             |
-| symbol              | string                        | Possibly with case conversion                                    |
-| hash table          | ={"k1":v1, "k2":v2, ...}=     | Keys may be case converted. Order not guaranteed.                |
-| =(k1 v1 k2 v2 ...)= | ={"k1":v1, "k2":v2, ...}=     | Plist, =k1= either symbol or string. Keys may be case converted. |
-| =((k1 . v1) ...)=   | ={"k1":v1, ...}=              | Alist, keys may be case converted                                |
-| =plist-json-obj=    | object                        | Force to treat list as plist.                                    |
-| =alist-json-obj=    | object                        | Force to treat list as alist.                                    |
-| =(v1 v2 ...)=       | =[v1, v2, ...]=               | List if =v1= is neither symbol nor string, treat as array.       |
+| From Lisp           | To JSON                   | Remarks                                               |
+|---------------------+---------------------------+-------------------------------------------------------|
+| =T=                 | =true=                    |                                                       |
+| =:true=             | =true=                    |                                                       |
+| =:false=            | =false=                   |                                                       |
+| =NIL=               | ={}=                      | Empty object                                          |
+| =:null=             | =null=                    |                                                       |
+| integer             | integer                   |                                                       |
+| real number         | real number               | Ratio is printed as single-float                      |
+| string              | string                    | Properly escaped JSON string.                         |
+| =#(v1 v2 ...)=      | =[v1, v2, ...]=           | Each value in the array is recursively output.        |
+| =#()=               | []                        |                                                       |
+| =JSON-VALUE=        | verbatim                  | Can control the exact thing printed.                  |
+| symbol              | string                    | Possibly with case conversion                         |
+| hash table          | ={"k1":v1, "k2":v2, ...}= | Order not guaranteed.                                 |
+| =(k1 v1 k2 v2 ...)= | ={"k1":v1, "k2":v2, ...}= | Plist, =k1= either symbol or string.                  |
+| =((k1 . v1) ...)=   | ={"k1":v1, ...}=          | Alist, keys may be case converted                     |
+| =plist-json-obj=    | object                    | Force to treat list as plist.                         |
+| =alist-json-obj=    | object                    | Force to treat list as alist.                         |
+| =(v1 v2 ...)=       | =[v1, v2, ...]=           | If =v1= is neither symbol nor string, treat as array. |
 
 **** =T=, =NIL= and null
 Since in Common Lisp, =NIL= means both false and empty list, we
@@ -79,32 +85,89 @@ A Lisp list may be guessed as either:
 For the special case of empty Lisp list (i.e. =NIL= or =()=), we
 choose to map to empty JSON object ={}=.
 
+Note that if you want to force a list to be treated as plist or alist,
+you may create =plist-jsob-obj= or =alist-json-obj= wrapper over the
+list respectively (which works for lists nested in other structures),
+or use specific printing functions =print-plist-as-json= or
+=print-alist-as-json= (which only works for top-level value to the
+function).
+
 **** Case conversion for symbols
 In Lisp, a keyword symbol or plain symbol is often used as keys in
 hash-table, plist or alist.
 
 Symbols in Lisp are by default read as upper case, and characters in
 Lisp may be lower case, upper case, or neither. It may be more common
-to use lower case for keys in JSON (e.g. plotly), so we by default
-performs case conversion for symbols so that we need to write symbols
-as =:|hello|= to get ="hello"=, or =:|World|= to get ="World"=.
+to use lower case for keys in JSON (e.g. plotly), so we may want to
+perform case conversion for symbols so that we need not write symbols
+as =:|hello|= to get "hello", or =:|World|= to get "World".
 
-***** Default case conversion
-The default conversion rule is as follows (which can be customized,
-see "Customization") as follows:
+For flexibility, the string form of a key =k= is obtained through
+=(funcall *key-as-str-func* k)=, where the customizable special
+variable is a function to return the desired string form of the key,
+performing any desired case conversion. By default,
+=*key-as-str-func*= is =#'key-as-string=, described as follows.
 
-- with both upper and lower case: use symbol name as string as is.
-- otherwise: convert the symbol name as string to lower case.
+The function =key-as-string= leaves string as is, therefore, by
+default, you may use string as key to get the exact case you want. For
+symbols, the behavior is controlled by the special variable
+=*how-to-convert-key-case*=.
 
-NOTE: in the implementation, we convert to lower case if the symbol
-name has any lower case character, because if there are no lower case
-characters, it cannot be mixed case.
+  - Possible values of =*how-to-convert-key-case*=:
 
-***** Caching
-TODO
+    - =:lower-unless-mixed-case=: the default, which would convert the symbol name to lower case if not mixed case.
+
+      - with both upper and lower case: use symbol-name as is.
+
+      - otherwise: convert the symbol-name to lower case.
+
+        NOTE: in the implementation, we use the symbol name as is if it
+        has any lower case character, because then it is either mixed
+        case, or already has not upper case letter that need
+        conversions.
+
+    - =:as-is=: will use the symbol-name as is.
+
+    - =:lower=: always convert the symbol-name to lower case.
+
+  - Caching of case conversion (=key-as-string=)
+
+    If =*how-to-convert-key-case*= is not =:as-is=, =key-as-string=
+    will memoize the conversion of the function =convert-key-to-str=
+    (according to =*how-to-convert-key-case*=) in the hash-table
+    =*convert-key-to-str*=. Therefore, you may pre-fill
+    =*convert-key-to-str*=, or replace it with another suitable
+    hash-table.
 
 **** Duplicate keys in objects
-TODO
+JSON does not clearly specify whether duplicate keys in JSON object is
+allowed, some JSON parsers raises error on duplicate object keys, some
+libraries take the last seen key. Therefore, for flexibility, we allow
+optionally outputing duplicate keys from plist or alist to JSON
+object. This behavior is controlled by =*allow-dup-keys*=, which if
+true, will just output the keys in plist or alist in the order they
+appear; and if =*allow-dup-keys*= is false (i.e. =NIL=, which is the
+default), will output the key that appears first. This is so that we
+may prepend to the front of plist or alist to override some values for
+the output JSON, while sharing most of the list structure.
+
+Note that for hash-table, since the keys do not have natural order,
+its output is not affected by =*allow-dup-keys*=. However, since the
+keys need to be converted to string as JSON keys, it is therefore
+still end up with duplciate keys for hash-table, e.g. different
+symbols end up converting to the same string as key.
+
+For one top-level value, you may explicitly call
+=print-alist-as-json-no-dup-keys= for alist,
+=print-plist-as-json-no-dup-keys= for plist; or
+=print-alist-as-json-allow-dup-keys= for alist and
+=print-plist-as-json-allow-dup-keys= as appropriate, to allow or
+disallow dupliate keys as desired.
+
+**** =JSON-VALUE= for special value
+You may use the struct =json-value= (constructed with
+=(make=json-value :print-form str)=) to represent a JSON value that
+will be printed as the explicitly provided as print form.
 
 *** Main Functions
 TODO
