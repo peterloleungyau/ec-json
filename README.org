@@ -71,7 +71,8 @@ JSON true, and the Lisp true =T= of course maps to JOSN true.
 A Lisp list may be guessed as either:
 
 - plist (property list): if the first item is a symbol (normal symbol
-  or keyword) or string. Maps to JSON object.
+  or keyword, even =:true=, =:false= or =:null=) or string. Maps to
+  JSON object.
 
 - alist (association list): if the first item is a cons. Maps to JSON
   object.
@@ -101,6 +102,11 @@ Lisp may be lower case, upper case, or neither. It may be more common
 to use lower case for keys in JSON (e.g. plotly), so we may want to
 perform case conversion for symbols so that we need not write symbols
 as =:|hello|= to get "hello", or =:|World|= to get "World".
+
+By default, we use string as is, and for symbols, convert to lower
+case unless it is mixed case. This should be usable for most cases,
+but the case conversion can be customized in a few ways, as described
+below.
 
 For flexibility, the string form of a key =k= is obtained through
 =(funcall *key-as-str-func* k)=, where the customizable special
@@ -137,7 +143,7 @@ symbols, the behavior is controlled by the special variable
     (according to =*how-to-convert-key-case*=) in the hash-table
     =*convert-key-to-str*=. Therefore, you may pre-fill
     =*convert-key-to-str*=, or replace it with another suitable
-    hash-table.
+    hash-table, to get the desired case for a selected set of symbols.
 
 **** Duplicate keys in objects
 JSON does not clearly specify whether duplicate keys in JSON object is
@@ -166,14 +172,149 @@ disallow dupliate keys as desired.
 
 **** =JSON-VALUE= for special value
 You may use the struct =json-value= (constructed with
-=(make=json-value :print-form str)=) to represent a JSON value that
-will be printed as the explicitly provided as print form.
+=(make-json-value :print-form str)=) to represent a JSON value that
+will be printed as the explicitly provided print form (printed with
+"~A" format specified of =format=).
 
 *** Main Functions
-TODO
+- =print-as-json=:
+
+  A generic function, called as =(print-as-json x out)= to print a
+  value =x= as JSON to the stream =out=, which defaults to
+  =*json-output*= which is a synonym stream of =*standard-output*=.
+
+  The default method prints with the above discussed mapping and
+  conversion.  You may define methods for any value (possibly self
+  defined class or struct) to customize the output.
+
+  This is intended to be the main function for encoding JSON, and
+  would be sufficient in most cases. However, there are specific
+  functions if you want to treat a top-level value in a specific way.
+
+- =print-real-as-json=:
+
+  Print a real number as JSON. Note that ratios are printed as
+  =single-float=.
+
+- =print-string-as-json=:
+
+  Print string using double quote, and properly escape the few
+  characters required by JSON.
+
+- =print-symbol-as-json=:
+
+  Print symbol as JSON, which is printed as string after case
+  conversion according to =*key-as-str-func*= as describe above.
+
+- =print-list-as-json-array=:
+
+  Print a Lisp list always as an array, and each element is printed
+  with =print-as-json=.
+
+- =print-array-as-json=:
+
+  Print a Lisp array as JSON array, which is already the default
+  behavior for Lisp arrays. Note that we only handle one-dimensional
+  arrays.
+
+- =print-hash-table-as-json=:
+
+  Print a Lisp hash-table as JSON object, but the keys are in no
+  guaranteed order. The keys are possibly case converted as described
+  above.
+
+- =print-plist-as-json=:
+
+  Treat a list as plist (i.e. the even number index are keys, and odd
+  number index are values), and print as JSON object, with possibly
+  key conversion as describe above. Handling of duplicate keys is
+  according to =*allow-dup-keys*= as describe above.
+
+  - =print-plist-as-json-no-dup-keys=:
+
+    Variant to not print duplicate keys for plist, and use the first
+    key.
+
+  - =print-plist-as-json-allow-dup-keys=:
+
+    Variant to allow duplicate keys for plist, and print all the keys
+    in the order they appear.
+
+- =print-alist-as-json=:
+
+  Treat a list as alist (i.e. a list of cons cells of key and value
+  pairs, i.e. =(key . value)=), and print as JSON object, with
+  possibly key conversion as describe above. Handling of duplicate
+  keys is according to =*allow-dup-keys*= as describe above.
+
+  - =print-alist-as-json-no-dup-keys=:
+
+    Variant to not print duplicate keys for alist, and use the first
+    key.
+
+  - =print-alist-as-json-allow-dup-keys=:
+
+    Variant to allow duplicate keys for alist, and print all the keys in the
+    order they appear.
+
+- =make-plist-json-obj=:
+
+  To construct a =plist-json-obj= struct, which explicitly marks a
+  list to treat as plist, and this value could appear in any nested
+  level (not just top-level) and still will be treated as plist.
+
+- =make-alist-json-obj=:
+
+  To construct a =alist-json-obj= struct, which explicitly marks a
+  list to treat as alist, and this value could appear in any nested
+  level (not just top-level) and still will be treated as plist.
+
+- =as-json-obj=:
+
+  To make a hash-table or list to be treated as JSON obj.
+
+  For hash-table, return as is, because it will be printed as JSON
+  object. For list, if the =car= is a cons, then guess it to be alist,
+  and use =make-alist-json-obj= to wrap the list as =alist-json-obj=;
+  otherwise guess it to be plist, and use =make-plist-json-obj= to
+  wrap the list as =plist-json-obj=.
+
+- =make-json-value=:
+
+  To make a special value with its desired print value, as describe
+  above.
+
+*** Error condition
+For objects that with no known method of encoding, an
+=unencodable-value-error= condition would be signaled with =error=,
+with the value, and optionally the context.
 
 *** Customization
-TODO
+There are a few ways to customize the JSON printing:
 
-** Limitations
-TODO
+- custom printing of any value:
+
+  By defining method of =print-as-json=, basically any customization
+  should be possible, but with varying amount of work.
+
+- key conversion to string:
+
+  By customizing =*key-as-str-func*=, any desired transformations on
+  keys is possible.
+
+  By customizing =*how-to-convert-key-case*=, the key conversion
+  strategy could be tuned, as describe above.
+
+  By customizing or pre-filling =*convert-key-to-str*=, the desired
+  key conversion (not just case conversion) of selected symbols could
+  be customized.
+
+- special value:
+
+  By using =json-value=, any special (constant) value could be
+  printed.
+
+** Limitation
+- Lack of indentation:
+
+  The JSON output has no indentation, i.e. it is printed on one line.
