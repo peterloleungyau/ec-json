@@ -16,7 +16,8 @@ Here are some examples to quickly give an idea of the JSON output.
 - basic values, in a vector
 #+begin_src lisp
   ;; main function, by default prints to *json-output* which is by default a synonym stream of *standard-output*
-  (ec-json:print-as-json #(t :true :false nil :null 123 2/3 3.14 "Hello" World :|Mixed-Case|))
+  (ec-json:print-as-json
+   #(t :true :false nil :null 123 2/3 3.14 "Hello" World :|Mixed-Case|))
 #+end_src
 
 #+begin_src javascript
@@ -53,6 +54,22 @@ conversions. =json-value= can output anything you like.
 
 #+begin_src javascript
   {"WhatEver":I_Like, "same-key":{"a":1, "b":2}, "same-key":[10, 9, 8], "same-key":{}}
+#+end_src
+
+- guessing of list
+List will be guessed as plist if the car looks like a key. Better use array if you want an array.
+
+#+begin_src lisp
+  (ec-json:print-as-json
+   `(:x (1 a)
+     :y (a :b)
+     :z #(a :b)
+     :w ("a" "b")
+     :u #("a" "b")))
+#+end_src
+
+#+begin_src javascript
+  {"x":[1, "a"], "y":{"a":"b"}, "z":["a", "b"], "w":{"a":"b"}, "u":["a", "b"]}
 #+end_src
 ** Installation
 
