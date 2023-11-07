@@ -10,6 +10,50 @@ plotly graphs are described by Javascript values, it could be
 generated nicely with JSON. But this simple JSON encoder could also be
 used for other simple purpose, so it is split into a separate library.
 
+** Quick Examples
+Here are some examples to quickly give an idea of the JSON output.
+
+- basic values, in a vector
+#+begin_src lisp
+  ;; main function, by default prints to *json-output* which is by default a synonym stream of *standard-output*
+  (ec-json:print-as-json #(t :true :false nil :null 123 2/3 3.14 "Hello" World :|Mixed-Case|))
+#+end_src
+
+#+begin_src javascript
+  [true, true, false, {}, null, 123, 0.6666667, 3.14, "Hello", "world", "Mixed-Case"]
+#+end_src
+
+- plist and alist as JSON object, key conversion
+#+begin_src lisp
+  (ec-json:print-as-json
+   '(:abc #()
+     :Alist ((:a . 1) ("Hello" . 2))
+     :|Array| #(101 102 103)))
+#+end_src
+
+#+begin_src javascript
+  {"abc":[], "alist":{"a":1, "Hello":2}, "Array":[101, 102, 103]}
+#+end_src
+
+- hash-table, some lists regarded as array, special value
+
+By default, for duplicate keys, retain only the first one. For
+hash-table, can still result in duplicate keys due to key
+conversions. =json-value= can output anything you like.
+
+#+begin_src lisp
+  (ec-json:print-as-json
+   (let ((h (make-hash-table :test 'equal)))
+     (setf (gethash "WhatEver" h) (ec-json:make-json-value :print-form "I_Like")
+           (gethash :same-key h) '(:a 1 :b 2 :a 3)
+           (gethash "same-key" h) '(10 9 8)
+           (gethash :|same-key| h) ())
+     h))
+#+end_src
+
+#+begin_src javascript
+  {"WhatEver":I_Like, "same-key":{"a":1, "b":2}, "same-key":[10, 9, 8], "same-key":{}}
+#+end_src
 ** Installation
 
 *** With Quicklisp
