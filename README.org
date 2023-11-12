@@ -56,6 +56,25 @@ conversions. =json-value= can output anything you like.
   {"WhatEver":I_Like, "same-key":{"a":1, "b":2}, "same-key":[10, 9, 8], "same-key":{}}
 #+end_src
 
+- allowing duplicate keys in plist and alist
+
+You may set the =*allow-dup-keys*= special variable to true to output
+duplicate keys for plist and alist.
+
+#+begin_src lisp
+  (let ((ec-json:*allow-dup-keys* t))
+    (ec-json:print-as-json
+     '(:a 1
+       :b ((:x . "hello") (:y . "world") (:z . "hi") (:y . 5))
+       :c 2
+       :a 3)))
+
+#+end_src
+
+#+begin_src javascript
+  {"a":1, "b":{"x":"hello", "y":"world", "z":"hi", "y":5}, "c":2, "a":3}
+#+end_src
+
 - guessing of list
 List will be guessed as plist if the car looks like a key. Better use array if you want an array.
 
